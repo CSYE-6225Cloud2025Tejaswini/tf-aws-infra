@@ -8,7 +8,7 @@ data "aws_availability_zones" "zones" {
   state = "available"
 }
 
-# Create VPC
+# Create custom VPC
 resource "aws_vpc" "network" {
   cidr_block = var.network_cidr
 

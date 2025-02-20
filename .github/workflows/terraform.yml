@@ -3,10 +3,10 @@ name: Infrastructure Validation
 on:
   pull_request:
     branches:
-      - master
+      - main
     paths:
       - "**.tf"
-      - ".github/workflows/infra-check.yml"
+      - ".github/workflows/terraform.yml"
  
 permissions:
   contents: read
