@@ -19,7 +19,7 @@ resource "aws_vpc" "network" {
 
 # Create Internet Gateway
 resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.network.id
+                                         vpc_id = aws_vpc.network.id
 
   tags = {
     Name = "Custom-IGW"
