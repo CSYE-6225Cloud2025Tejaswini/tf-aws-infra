@@ -1,11 +1,11 @@
 provider "aws" {
-  region  = var.regions
+  region  = var.region
   profile = var.profile
 }
 
 # Fetch available AZs dynamically
 data "aws_availability_zones" "zones" {
-  state = "available"
+                            state = "available"
 }
 
 # Create custom VPC
