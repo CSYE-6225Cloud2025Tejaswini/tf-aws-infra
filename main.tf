@@ -28,7 +28,7 @@ resource "aws_internet_gateway" "igw" {
 
 # Create Public Subnets Dynamically
 resource "aws_subnet" "accessible" {
-  count = varr.subnet_count
+  count = var.subnet_count
 
   vpc_id                  = aws_vpc.network.id
   cidr_block              = cidrsubnet(var.network_cidr, 8, count.index) # Auto-calculates CIDR blocks
