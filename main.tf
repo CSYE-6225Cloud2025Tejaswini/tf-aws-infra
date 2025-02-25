@@ -9,7 +9,7 @@ data "aws_availability_zones" "zones" {
 }
 
 # Create custom VPC
-  resource "aws_vpc" "network" {
+resource "aws_vpc" "network" {
   cidr_block = var.network_cidr
 
   tags = {
@@ -28,7 +28,7 @@ resource "aws_internet_gateway" "igw" {
 
 # Create Public Subnets Dynamically
 resource "aws_subnet" "accessible" {
-  count = var.subnet_count
+  count = varr.subnet_count
 
   vpc_id                  = aws_vpc.network.id
   cidr_block              = cidrsubnet(var.network_cidr, 8, count.index) # Auto-calculates CIDR blocks
