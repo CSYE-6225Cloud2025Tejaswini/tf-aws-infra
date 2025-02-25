@@ -5,11 +5,11 @@ provider "aws" {
 
 # Fetch available AZs dynamically
 data "aws_availability_zones" "zones" {
-                    state = "available"
+  state = "available"
 }
 
 # Create custom VPC
-resource "aws_vpc" "network" {
+  resource "aws_vpc" "network" {
   cidr_block = var.network_cidr
 
   tags = {
