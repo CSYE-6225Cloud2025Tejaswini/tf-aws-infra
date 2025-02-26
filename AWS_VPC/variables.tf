@@ -8,7 +8,7 @@ variable "region" {
 variable "profile" {
   description = "CLI Profile for authentication"
   type        = string
-  default     = "demo" # AWS CLI default profile
+  default     = "profiledev" # AWS CLI default profile
 }
 
 variable "network_cidr" {
@@ -22,3 +22,22 @@ variable "subnet_count" {
   type        = number
   default     = 3 # Default to 3 subnets each for public & private
 }
+
+variable "ami_id" {
+  description = "Custom AMI ID for EC2"
+  type        = string
+  default     = "ami-00b5b15d9b4ea23db"
+}
+
+variable "key_name" {
+  description = "SSH key pair name for EC2"
+  type        = string
+  default     = "ec2test"
+}
+
+variable "app_port" {
+  description = "Port number on which the application runs"
+  type        = number
+  default     = 8080
+}
+
