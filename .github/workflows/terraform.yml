@@ -32,15 +32,18 @@ jobs:
       - name: Code Format Verification
         id: format
         run: terraform fmt -check -recursive
+        working-directory: AWS_VPC
         continue-on-error: false
  
       - name: Configuration Setup
         id: setup
         run: terraform init -backend=false
+        working-directory: AWS_VPC
  
       - name: Configuration Verification
         id: verify
         run: terraform validate
+        working-directory: AWS_VPC
  
       - name: Error Check
         if: steps.format.outcome == 'failure' || steps.verify.outcome == 'failure'
