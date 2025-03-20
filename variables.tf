@@ -1,4 +1,3 @@
-
 variable "region" {
   description = "Region for deploying resources"
   type        = string
@@ -8,7 +7,7 @@ variable "region" {
 variable "profile" {
   description = "CLI Profile for authentication"
   type        = string
-  default     = "profiledev" # AWS CLI default profile
+  default     = "packerdemo"
 }
 
 variable "network_cidr" {
@@ -26,7 +25,7 @@ variable "subnet_count" {
 variable "ami_id" {
   description = "Custom AMI ID for EC2"
   type        = string
-  default     = "ami-00b5b15d9b4ea23db"
+  default     = "ami-0181b86e566bca888"
 }
 
 variable "key_name" {
@@ -41,3 +40,33 @@ variable "app_port" {
   default     = 8080
 }
 
+
+variable "db_instance_class" {
+  description = "RDS instance type"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "db_name" {
+  description = "Name of the database"
+  type        = string
+  default     = "csye6225"
+}
+
+variable "db_username" {
+  description = "Username for database access"
+  type        = string
+  default     = "csye6225"
+}
+
+variable "db_password" {
+  description = "Password for database access"
+  type        = string
+  sensitive   = true
+}
+
+variable "db_port" {
+  description = "Port for database connection"
+  type        = number
+  default     = 3306
+}
