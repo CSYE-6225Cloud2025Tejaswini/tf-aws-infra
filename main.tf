@@ -136,6 +136,25 @@ resource "aws_security_group" "application_sg" {
   }
 }
 
+# CloudWatch Log Groups for Application
+resource "aws_cloudwatch_log_group" "webapp_logs" {
+  name              = "webapp-logs"
+  retention_in_days = 14
+
+  tags = {
+    Name = "WebApp Application Logs"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "webapp_system_logs" {
+  name              = "webapp-system-logs"
+  retention_in_days = 7
+
+  tags = {
+    Name = "WebApp System Logs"
+  }
+}
+
 resource "aws_instance" "web" {
   ami                    = var.ami_id
   instance_type          = "t2.micro"
@@ -148,10 +167,10 @@ resource "aws_instance" "web" {
   user_data = <<-EOF
     #!/bin/bash
     # Create application directory if it doesn't exist
-    mkdir -p /opt/webapp
+    mkdir -p /opt/myapp
     
     # Create environment file
-    cat > /opt/webapp/.env << ENVEOF
+    cat > /opt/myapp/.env << ENVEOF
     DB_HOST=${aws_db_instance.webapp_db.address}
     DB_PORT=${var.db_port}
     DB_USER=${var.db_username}
@@ -164,8 +183,55 @@ resource "aws_instance" "web" {
     ENVEOF
     
     # Set proper permissions
-    chmod 600 /opt/webapp/.env
-    chown webapp:webapp /opt/webapp/.env
+    chmod 600 /opt/myapp/.env
+    chown webapp:webapp /opt/myapp/.env
+    
+    # Create log directory if it doesn't exist
+    mkdir -p /var/log/webapp
+    chown webapp:webapp /var/log/webapp
+    chmod 755 /var/log/webapp
+
+    # Configure CloudWatch agent
+    cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWAGENTCONFIG'
+    {
+      "agent": {
+        "metrics_collection_interval": 10,
+        "run_as_user": "webapp"
+      },
+      "logs": {
+        "logs_collected": {
+          "files": {
+            "collect_list": [
+              {
+                "file_path": "/var/log/webapp/application.log",
+                "log_group_name": "webapp-logs",
+                "log_stream_name": "{instance_id}-application",
+                "retention_in_days": 14
+              },
+              {
+                "file_path": "/var/log/syslog",
+                "log_group_name": "webapp-system-logs",
+                "log_stream_name": "{instance_id}-syslog",
+                "retention_in_days": 7
+              }
+            ]
+          }
+        }
+      },
+      "metrics": {
+        "metrics_collected": {
+          "statsd": {
+            "service_address": ":8125",
+            "metrics_collection_interval": 10,
+            "metrics_aggregation_interval": 60
+          }
+        }
+      }
+    }
+    CWAGENTCONFIG
+
+    # Restart CloudWatch agent to apply new configuration
+    systemctl restart amazon-cloudwatch-agent
     
     # Restart application service
     systemctl restart webapp
@@ -207,7 +273,7 @@ resource "aws_s3_bucket_public_access_block" "webapp_bucket_access" {
 
 # S3 Default Encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "webapp_bucket_encryption" {
-  bucket = aws_s3_bucket.webapp_bucket.id
+  bucket = aws_s3_bucket.webapp_bucket.bucket
 
   rule {
     apply_server_side_encryption_by_default {
@@ -218,7 +284,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "webapp_bucket_enc
 
 # S3 Lifecycle Policy
 resource "aws_s3_bucket_lifecycle_configuration" "webapp_bucket_lifecycle" {
-  bucket = aws_s3_bucket.webapp_bucket.id
+  bucket = aws_s3_bucket.webapp_bucket.bucket
 
   rule {
     id     = "transition-to-standard-ia"
@@ -265,6 +331,9 @@ resource "aws_db_subnet_group" "db_subnet_group" {
   tags = {
     Name = "WebApp DB Subnet Group"
   }
+  /*lifecycle {
+    ignore_changes = [tags]
+  }*/
 }
 
 # DB Parameter Group
@@ -275,6 +344,9 @@ resource "aws_db_parameter_group" "db_parameter_group" {
   tags = {
     Name = "WebApp DB Parameter Group"
   }
+  /*lifecycle {
+    ignore_changes = [tags]
+  }*/
 }
 
 # RDS Instance
@@ -295,9 +367,9 @@ resource "aws_db_instance" "webapp_db" {
   skip_final_snapshot    = true
   multi_az               = false
 
-  tags = {
+  /*tags = {
     Name = "WebApp RDS Instance"
-  }
+  }*/
 }
 
 # IAM Role for EC2 to access S3
@@ -343,14 +415,114 @@ resource "aws_iam_policy" "s3_access_policy" {
   })
 }
 
+# CloudWatch IAM Policy
+resource "aws_iam_policy" "cloudwatch_policy" {
+  name        = "cloudwatch_access_policy"
+  description = "Policy allowing EC2 to publish logs and metrics to CloudWatch"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricData",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeTags",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams",
+          "logs:DescribeLogGroups",
+          "logs:CreateLogStream",
+          "logs:CreateLogGroup"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter"
+        ]
+        Resource = "arn:aws:ssm:*:*:parameter/AmazonCloudWatch-*"
+      }
+    ]
+  })
+}
+
 # Attach Policy to Role
 resource "aws_iam_role_policy_attachment" "s3_policy_attachment" {
   role       = aws_iam_role.ec2_s3_access.name
   policy_arn = aws_iam_policy.s3_access_policy.arn
 }
 
+# Attach CloudWatch Policy to EC2 Role
+resource "aws_iam_role_policy_attachment" "cloudwatch_policy_attachment" {
+  role       = aws_iam_role.ec2_s3_access.name
+  policy_arn = aws_iam_policy.cloudwatch_policy.arn
+}
+
 # Instance Profile for EC2
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "ec2_s3_profile"
   role = aws_iam_role.ec2_s3_access.name
+}
+
+# CPU Utilization Alarm
+resource "aws_cloudwatch_metric_alarm" "ec2_cpu_alarm" {
+  alarm_name          = "webapp-high-cpu-utilization"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 80
+  alarm_description   = "This metric monitors EC2 CPU utilization"
+  
+  dimensions = {
+    InstanceId = aws_instance.web.id
+  }
+}
+
+# Custom Metric Dashboard for Application Metrics
+resource "aws_cloudwatch_dashboard" "webapp_dashboard" {
+  dashboard_name = "webapp-metrics-dashboard"
+  
+  dashboard_body = jsonencode({
+    widgets = [
+      {
+        type   = "metric"
+        x      = 0
+        y      = 0
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/EC2", "CPUUtilization", "InstanceId", aws_instance.web.id]
+          ]
+          period = 300
+          stat   = "Average"
+          region = var.region
+          title  = "EC2 CPU Utilization"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 6
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["CWAgent", "webapp_api.get./.count", { "stat": "Sum" }],
+            ["CWAgent", "webapp_api.post./.count", { "stat": "Sum" }],
+            ["CWAgent", "webapp_api.delete./.count", { "stat": "Sum" }]
+          ]
+          period = 300
+          stat   = "Average"
+          region = var.region
+          title  = "API Call Counts"
+        }
+      }
+    ]
+  })
 }
