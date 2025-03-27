@@ -7,7 +7,7 @@ variable "region" {
 variable "profile" {
   description = "CLI Profile for authentication"
   type        = string
-  default     = "packerdemo"
+  default     = "profiledemo"
 }
 
 variable "network_cidr" {
@@ -25,7 +25,7 @@ variable "subnet_count" {
 variable "ami_id" {
   description = "Custom AMI ID for EC2"
   type        = string
-  default     = "ami-0181b86e566bca888"
+  default     = "ami-0b7d223d4c275c14e"
 }
 
 variable "key_name" {
