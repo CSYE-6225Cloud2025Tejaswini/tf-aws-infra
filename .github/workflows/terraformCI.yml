@@ -1,17 +1,17 @@
 name: Infrastructure Validation
- 
+
 on:
   pull_request:
     branches:
       - main
     paths:
       - "**.tf"
-      - ".github/workflows/terraform.yml"
- 
+      - ".github/workflows/terraformCI.yml"
+
 permissions:
   contents: read
   pull-requests: write
- 
+
 jobs:
   infrastructure:
     name: Infrastructure
@@ -19,32 +19,29 @@ jobs:
     defaults:
       run:
         working-directory: ./
- 
+
     steps:
       - name: Get code
         uses: actions/checkout@v4
- 
+
       - name: Install IaC tool
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.7.0"
- 
+
       - name: Code Format Verification
         id: format
         run: terraform fmt -check -recursive
-        working-directory: AWS_VPC
         continue-on-error: false
- 
+
       - name: Configuration Setup
         id: setup
         run: terraform init -backend=false
-        working-directory: AWS_VPC
- 
+
       - name: Configuration Verification
         id: verify
         run: terraform validate
-        working-directory: AWS_VPC
- 
+
       - name: Error Check
         if: steps.format.outcome == 'failure' || steps.verify.outcome == 'failure'
         run: exit 1

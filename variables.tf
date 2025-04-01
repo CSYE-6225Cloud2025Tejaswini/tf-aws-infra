@@ -25,7 +25,7 @@ variable "subnet_count" {
 variable "ami_id" {
   description = "Custom AMI ID for EC2"
   type        = string
-  default     = "ami-0b7d223d4c275c14e"
+  default     = "ami-03247f5a7007cf9c5"
 }
 
 variable "key_name" {
