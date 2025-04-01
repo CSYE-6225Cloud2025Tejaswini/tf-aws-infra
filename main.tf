@@ -1,3 +1,4 @@
+# Define the AWS provider with region and profile from variables
 provider "aws" {
   region  = var.region
   profile = var.profile
@@ -8,7 +9,7 @@ data "aws_availability_zones" "zones" {
   state = "available"
 }
 
-# Create VPC
+# Create a Virtual Private Cloud (VPC)
 resource "aws_vpc" "network" {
   cidr_block = var.network_cidr
 
@@ -17,7 +18,7 @@ resource "aws_vpc" "network" {
   }
 }
 
-# Create Internet Gateway
+# Create an Internet Gateway for public internet access
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.network.id
 
@@ -26,7 +27,7 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-# Create Public Subnets Dynamically
+# Create Public Subnets dynamically in different AZs
 resource "aws_subnet" "accessible" {
   count = var.subnet_count
 
@@ -40,7 +41,7 @@ resource "aws_subnet" "accessible" {
   }
 }
 
-# Create Private Subnets Dynamically
+# Create Private Subnets dynamically in different AZs
 resource "aws_subnet" "restricted" {
   count = var.subnet_count
 
@@ -53,7 +54,7 @@ resource "aws_subnet" "restricted" {
   }
 }
 
-# Create Public Route Table
+# Create a Route Table for Public Subnets
 resource "aws_route_table" "accessible_rt" {
   vpc_id = aws_vpc.network.id
 
@@ -62,7 +63,7 @@ resource "aws_route_table" "accessible_rt" {
   }
 }
 
-# Add Internet Access Route
+# Add default route to the Internet Gateway for public subnets
 resource "aws_route" "internet_access" {
   route_table_id         = aws_route_table.accessible_rt.id
   destination_cidr_block = "0.0.0.0/0"
@@ -76,7 +77,7 @@ resource "aws_route_table_association" "accessible_rta" {
   route_table_id = aws_route_table.accessible_rt.id
 }
 
-# Create Private Route Table
+# Create Private Route Table Private Subnets
 resource "aws_route_table" "restricted_rt" {
   vpc_id = aws_vpc.network.id
 
@@ -92,38 +93,39 @@ resource "aws_route_table_association" "restricted_rta" {
   route_table_id = aws_route_table.restricted_rt.id
 }
 
-# Application Security Group
+# Security Group for Application allowing public access
 resource "aws_security_group" "application_sg" {
   vpc_id = aws_vpc.network.id
 
+  # Allow SSH access from anywhere
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  # Allow HTTP access from anywhere
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  # Allow HTTP access from anywhere
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  # Allow application-specific port access
   ingress {
     from_port   = var.app_port
     to_port     = var.app_port
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  # Allow all outbound traffic
   egress {
     from_port   = 0
     to_port     = 0
@@ -136,106 +138,92 @@ resource "aws_security_group" "application_sg" {
   }
 }
 
-# CloudWatch Log Groups for Application
-resource "aws_cloudwatch_log_group" "webapp_logs" {
-  name              = "webapp-logs"
-  retention_in_days = 14
-
-  tags = {
-    Name = "WebApp Application Logs"
-  }
-}
-
-resource "aws_cloudwatch_log_group" "webapp_system_logs" {
-  name              = "webapp-system-logs"
-  retention_in_days = 7
-
-  tags = {
-    Name = "WebApp System Logs"
-  }
-}
-
 resource "aws_instance" "web" {
   ami                    = var.ami_id
   instance_type          = "t2.micro"
   subnet_id              = aws_subnet.accessible[0].id
   vpc_security_group_ids = [aws_security_group.application_sg.id]
   key_name               = var.key_name
-  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  iam_instance_profile   = aws_iam_instance_profile.existing_profile.name
 
-  # Add user data to configure environment
   user_data = <<-EOF
-    #!/bin/bash
-    # Create application directory if it doesn't exist
-    mkdir -p /opt/myapp
-    
-    # Create environment file
-    cat > /opt/myapp/.env << ENVEOF
-    DB_HOST=${aws_db_instance.webapp_db.address}
-    DB_PORT=${var.db_port}
-    DB_USER=${var.db_username}
-    DB_PASSWORD=${var.db_password}
-    DB_NAME=${var.db_name}
-    AWS_REGION=${var.region}
-    S3_BUCKET=${aws_s3_bucket.webapp_bucket.bucket}
-    PORT=${var.app_port}
-    NODE_ENV=production
-    ENVEOF
-    
-    # Set proper permissions
-    chmod 600 /opt/myapp/.env
-    chown webapp:webapp /opt/myapp/.env
-    
-    # Create log directory if it doesn't exist
-    mkdir -p /var/log/webapp
-    chown webapp:webapp /var/log/webapp
-    chmod 755 /var/log/webapp
-
-    # Configure CloudWatch agent
-    cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWAGENTCONFIG'
-    {
-      "agent": {
-        "metrics_collection_interval": 10,
-        "run_as_user": "webapp"
-      },
-      "logs": {
-        "logs_collected": {
-          "files": {
-            "collect_list": [
-              {
-                "file_path": "/var/log/webapp/application.log",
-                "log_group_name": "webapp-logs",
-                "log_stream_name": "{instance_id}-application",
-                "retention_in_days": 14
-              },
-              {
-                "file_path": "/var/log/syslog",
-                "log_group_name": "webapp-system-logs",
-                "log_stream_name": "{instance_id}-syslog",
-                "retention_in_days": 7
-              }
-            ]
-          }
+  #!/bin/bash
+  # Create application directory if it doesn't exist
+  mkdir -p /opt/webapp
+  
+  # Install CloudWatch agent
+  wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+  dpkg -i amazon-cloudwatch-agent.deb
+  
+  # Configure CloudWatch agent
+  cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWAGENTCONFIG'
+  {
+    "agent": {
+      "metrics_collection_interval": 60,
+      "run_as_user": "root"
+    },
+    "logs": {
+      "logs_collected": {
+        "files": {
+          "collect_list": [
+            {
+              "file_path": "/opt/webapp/logs/application.log",
+              "log_group_name": "webapp-logs",
+              "log_stream_name": "{instance_id}-application",
+              "retention_in_days": 7
+            },
+            {
+              "file_path": "/opt/webapp/logs/error.log",
+              "log_group_name": "webapp-logs",
+              "log_stream_name": "{instance_id}-error",
+              "retention_in_days": 7
+            }
+          ]
         }
-      },
-      "metrics": {
-        "metrics_collected": {
-          "statsd": {
-            "service_address": ":8125",
-            "metrics_collection_interval": 10,
-            "metrics_aggregation_interval": 60
-          }
+      }
+    },
+    "metrics": {
+      "namespace": "WebApp",
+      "metrics_collected": {
+        "statsd": {
+          "service_address": ":8125",
+          "metrics_collection_interval": 10,
+          "metrics_aggregation_interval": 60
         }
       }
     }
-    CWAGENTCONFIG
-
-    # Restart CloudWatch agent to apply new configuration
-    systemctl restart amazon-cloudwatch-agent
-    
-    # Restart application service
-    systemctl restart webapp
-  EOF
+  }
+  CWAGENTCONFIG
+  
+  # Start CloudWatch agent
+  /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+  
+  # Create environment file
+  cat > /opt/webapp/.env << ENVEOF
+  DB_HOST=${aws_db_instance.webapp_db.address}
+  DB_PORT=${var.db_port}
+  DB_USER=${var.db_username}
+  DB_PASSWORD=${var.db_password}
+  DB_NAME=${var.db_name}
+  AWS_REGION=${var.region}
+  S3_BUCKET=${aws_s3_bucket.webapp_bucket.bucket}
+  PORT=${var.app_port}
+  NODE_ENV=production
+  LOG_DIRECTORY=/opt/webapp/logs
+  ENVEOF
+  
+  # Create directories
+  mkdir -p /opt/webapp/logs
+  chmod 755 /opt/webapp/logs
+  
+  # Set proper permissions
+  chmod 600 /opt/webapp/.env
+  chown webapp:webapp /opt/webapp/.env
+  chown webapp:webapp /opt/webapp/logs
+  
+  # Restart application service
+  systemctl restart webapp
+EOF
 
   root_block_device {
     volume_size           = 25
@@ -254,7 +242,8 @@ resource "aws_instance" "web" {
 resource "random_uuid" "bucket_uuid" {}
 
 resource "aws_s3_bucket" "webapp_bucket" {
-  bucket = "csye6225-${random_uuid.bucket_uuid.result}"
+  bucket        = "csye6225-${random_uuid.bucket_uuid.result}"
+  force_destroy = true
 
   tags = {
     Name = "WebApp-S3-Bucket"
@@ -273,7 +262,7 @@ resource "aws_s3_bucket_public_access_block" "webapp_bucket_access" {
 
 # S3 Default Encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "webapp_bucket_encryption" {
-  bucket = aws_s3_bucket.webapp_bucket.bucket
+  bucket = aws_s3_bucket.webapp_bucket.id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -284,11 +273,15 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "webapp_bucket_enc
 
 # S3 Lifecycle Policy
 resource "aws_s3_bucket_lifecycle_configuration" "webapp_bucket_lifecycle" {
-  bucket = aws_s3_bucket.webapp_bucket.bucket
+  bucket = aws_s3_bucket.webapp_bucket.id
 
   rule {
     id     = "transition-to-standard-ia"
     status = "Enabled"
+
+    filter {
+      prefix = "logs/"
+    }
 
     transition {
       days          = 30
@@ -296,6 +289,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "webapp_bucket_lifecycle" {
     }
   }
 }
+
 
 # Database Security Group
 resource "aws_security_group" "database_sg" {
@@ -331,9 +325,6 @@ resource "aws_db_subnet_group" "db_subnet_group" {
   tags = {
     Name = "WebApp DB Subnet Group"
   }
-  /*lifecycle {
-    ignore_changes = [tags]
-  }*/
 }
 
 # DB Parameter Group
@@ -344,9 +335,6 @@ resource "aws_db_parameter_group" "db_parameter_group" {
   tags = {
     Name = "WebApp DB Parameter Group"
   }
-  /*lifecycle {
-    ignore_changes = [tags]
-  }*/
 }
 
 # RDS Instance
@@ -367,9 +355,9 @@ resource "aws_db_instance" "webapp_db" {
   skip_final_snapshot    = true
   multi_az               = false
 
-  /*tags = {
+  tags = {
     Name = "WebApp RDS Instance"
-  }*/
+  }
 }
 
 # IAM Role for EC2 to access S3
@@ -415,34 +403,24 @@ resource "aws_iam_policy" "s3_access_policy" {
   })
 }
 
-# CloudWatch IAM Policy
-resource "aws_iam_policy" "cloudwatch_policy" {
+# CloudWatch Access Policy
+resource "aws_iam_policy" "cloudwatch_access_policy" {
   name        = "cloudwatch_access_policy"
-  description = "Policy allowing EC2 to publish logs and metrics to CloudWatch"
+  description = "Policy allowing EC2 to send logs and metrics to CloudWatch"
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
         Action = [
           "cloudwatch:PutMetricData",
-          "ec2:DescribeVolumes",
-          "ec2:DescribeTags",
-          "logs:PutLogEvents",
-          "logs:DescribeLogStreams",
-          "logs:DescribeLogGroups",
+          "logs:CreateLogGroup",
           "logs:CreateLogStream",
-          "logs:CreateLogGroup"
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
         ]
+        Effect   = "Allow"
         Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ssm:GetParameter"
-        ]
-        Resource = "arn:aws:ssm:*:*:parameter/AmazonCloudWatch-*"
       }
     ]
   })
@@ -454,75 +432,14 @@ resource "aws_iam_role_policy_attachment" "s3_policy_attachment" {
   policy_arn = aws_iam_policy.s3_access_policy.arn
 }
 
-# Attach CloudWatch Policy to EC2 Role
+# Attach CloudWatch Policy to Role
 resource "aws_iam_role_policy_attachment" "cloudwatch_policy_attachment" {
   role       = aws_iam_role.ec2_s3_access.name
-  policy_arn = aws_iam_policy.cloudwatch_policy.arn
+  policy_arn = aws_iam_policy.cloudwatch_access_policy.arn
 }
 
 # Instance Profile for EC2
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "ec2_s3_profile"
+resource "aws_iam_instance_profile" "existing_profile" {
+  name = "ec2_s3_profile_new"
   role = aws_iam_role.ec2_s3_access.name
-}
-
-# CPU Utilization Alarm
-resource "aws_cloudwatch_metric_alarm" "ec2_cpu_alarm" {
-  alarm_name          = "webapp-high-cpu-utilization"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = 300
-  statistic           = "Average"
-  threshold           = 80
-  alarm_description   = "This metric monitors EC2 CPU utilization"
-  
-  dimensions = {
-    InstanceId = aws_instance.web.id
-  }
-}
-
-# Custom Metric Dashboard for Application Metrics
-resource "aws_cloudwatch_dashboard" "webapp_dashboard" {
-  dashboard_name = "webapp-metrics-dashboard"
-  
-  dashboard_body = jsonencode({
-    widgets = [
-      {
-        type   = "metric"
-        x      = 0
-        y      = 0
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/EC2", "CPUUtilization", "InstanceId", aws_instance.web.id]
-          ]
-          period = 300
-          stat   = "Average"
-          region = var.region
-          title  = "EC2 CPU Utilization"
-        }
-      },
-      {
-        type   = "metric"
-        x      = 0
-        y      = 6
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["CWAgent", "webapp_api.get./.count", { "stat": "Sum" }],
-            ["CWAgent", "webapp_api.post./.count", { "stat": "Sum" }],
-            ["CWAgent", "webapp_api.delete./.count", { "stat": "Sum" }]
-          ]
-          period = 300
-          stat   = "Average"
-          region = var.region
-          title  = "API Call Counts"
-        }
-      }
-    ]
-  })
 }
