@@ -97,35 +97,35 @@ resource "aws_route_table_association" "restricted_rta" {
 resource "aws_security_group" "application_sg" {
   vpc_id = aws_vpc.network.id
 
-# Allow SSH access from anywhere
+  # Allow SSH access from anywhere
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-# Allow HTTP access from anywhere
+  # Allow HTTP access from anywhere
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-# Allow HTTP access from anywhere
+  # Allow HTTP access from anywhere
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-# Allow application-specific port access
+  # Allow application-specific port access
   ingress {
     from_port   = var.app_port
     to_port     = var.app_port
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-# Allow all outbound traffic
+  # Allow all outbound traffic
   egress {
     from_port   = 0
     to_port     = 0
@@ -278,14 +278,18 @@ resource "aws_s3_bucket_lifecycle_configuration" "webapp_bucket_lifecycle" {
   rule {
     id     = "transition-to-standard-ia"
     status = "Enabled"
-    prefix = "logs/"  # Add this line here
-    
+
+    filter {
+      prefix = "logs/"
+    }
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
     }
   }
 }
+
 
 # Database Security Group
 resource "aws_security_group" "database_sg" {
