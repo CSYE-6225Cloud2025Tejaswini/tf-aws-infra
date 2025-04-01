@@ -38,5 +38,6 @@ terraform.rc
  
 # AWS
 .aws/
+.terraform.lock.hcl
  
 has context menu
