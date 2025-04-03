@@ -6,7 +6,7 @@ resource "aws_launch_template" "webapp_launch_template" {
   key_name      = var.key_name
 
   iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_profile.name
+    name = aws_iam_instance_profile.existing_profile.name
   }
 
   network_interfaces {
