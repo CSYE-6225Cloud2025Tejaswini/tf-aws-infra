@@ -26,3 +26,13 @@ output "application_url" {
   description = "URL to access the application"
   value       = "http://${aws_instance.web.public_ip}:${var.app_port}"
 }
+
+output "load_balancer_dns" {
+  description = "DNS name of the load balancer"
+  value       = aws_lb.webapp_lb.dns_name
+}
+
+output "autoscaling_group_name" {
+  description = "Name of the Auto Scaling Group"
+  value       = aws_autoscaling_group.webapp_asg.name
+}

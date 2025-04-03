@@ -94,38 +94,26 @@ resource "aws_route_table_association" "restricted_rta" {
 }
 
 # Security Group for Application allowing public access
+# Application Security Group 
 resource "aws_security_group" "application_sg" {
   vpc_id = aws_vpc.network.id
 
-  # Allow SSH access from anywhere
+  # Keep SSH for admin access
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  # Allow HTTP access from anywhere
+
+  # Only allow traffic from the load balancer on application port
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = var.app_port
+    to_port         = var.app_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.load_balancer_sg.id]
   }
-  # Allow HTTP access from anywhere
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  # Allow application-specific port access
-  ingress {
-    from_port   = var.app_port
-    to_port     = var.app_port
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  # Allow all outbound traffic
+
   egress {
     from_port   = 0
     to_port     = 0

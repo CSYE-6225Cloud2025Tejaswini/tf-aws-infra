@@ -81,3 +81,12 @@ variable "db_port" {
   type        = number
   default     = 3306
 }
+variable "route53_zone_id" {
+  description = "Route53 hosted zone ID"
+  type        = string
+}
+
+variable "domain_name" {
+  description = "Domain name for the application"
+  type        = string
+}
