@@ -14,19 +14,10 @@ output "rds_endpoint" {
   value       = aws_db_instance.webapp_db.address
 }
 
-
-# Output the public IP address of the deployed EC2 instance
-output "ec2_public_ip" {
-  description = "Public IP of the EC2 instance"
-  value       = aws_instance.web.public_ip
-}
-
-# Construct and output the application URL using the EC2 public IP and application port
 output "application_url" {
   description = "URL to access the application"
-  value       = "http://${aws_instance.web.public_ip}:${var.app_port}"
+  value       = "http://${var.domain_name}"
 }
-
 output "load_balancer_dns" {
   description = "DNS name of the load balancer"
   value       = aws_lb.webapp_lb.dns_name

@@ -29,7 +29,7 @@ variable "subnet_count" {
 variable "ami_id" {
   description = "Custom AMI ID for EC2"
   type        = string
-  default     = "ami-03247f5a7007cf9c5"
+  default     = "ami-0a43950b2d34e59f3"
 }
 
 # SSH Key Pair name for EC2 instances
