@@ -166,7 +166,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   namespace           = "AWS/EC2"
   period              = 60
   statistic           = "Average"
-  threshold           = 90
+  threshold           = 5
   alarm_description   = "Scale up when CPU exceeds 90%"
   alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
 
@@ -184,7 +184,7 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
   namespace           = "AWS/EC2"
   period              = 60
   statistic           = "Average"
-  threshold           = 30
+  threshold           = 3
   alarm_description   = "Scale down when CPU is below 30%"
   alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
 
