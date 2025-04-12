@@ -79,17 +79,24 @@ SSL Certificates
 Environment	Certificate Source
 Dev	AWS Certificate Manager (ACM)
 Demo	Namecheap (manual import)
+
 Import Certificate Command:
 
-bash
-Copy
-Edit
+
 aws acm import-certificate \
   --certificate fileb://certificate.pem \
   --private-key fileb://private-key.pem \
   --certificate-chain fileb://certificate-chain.pem \
   --region us-east-1
+
+aws acm import-certificate \                   
+  --certificate fileb://demo.tejaswinichavan.me.crt \
+  --private-key fileb://demo.tejaswinichavan.me_key.pem \
+  --certificate-chain fileb://demo.tejaswinichavan.me.ca-bundle \
+  --region us-east-1 \
+  
 GitHub Actions CI/CD Workflow
+
 On Pull Request: Validate code and run tests
 
 On Pull Request Merge:
