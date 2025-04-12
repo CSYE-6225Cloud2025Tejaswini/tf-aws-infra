@@ -1,7 +1,7 @@
 # Route53 Record for Load Balancer
 resource "aws_route53_record" "webapp" {
   zone_id = var.route53_zone_id
-  name    = "demo"
+  name    = ""
   type    = "A"
 
   alias {

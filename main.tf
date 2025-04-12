@@ -1,7 +1,7 @@
 # Define the AWS provider with region and profile from variables
 provider "aws" {
   region  = var.region
-  profile = var.profile
+  profile = "packer-cli"
 }
 
 # Fetch available AZs dynamically
@@ -126,105 +126,6 @@ resource "aws_security_group" "application_sg" {
   }
 }
 
-resource "aws_instance" "web" {
-  ami                    = var.ami_id
-  instance_type          = "t2.micro"
-  subnet_id              = aws_subnet.accessible[0].id
-  vpc_security_group_ids = [aws_security_group.application_sg.id]
-  key_name               = var.key_name
-  iam_instance_profile   = aws_iam_instance_profile.existing_profile.name
-
-  user_data = <<-EOF
-  #!/bin/bash
-  # Create application directory if it doesn't exist
-  mkdir -p /opt/webapp
-  
-  # Install CloudWatch agent
-  wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
-  dpkg -i amazon-cloudwatch-agent.deb
-  
-  # Configure CloudWatch agent
-  cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWAGENTCONFIG'
-  {
-    "agent": {
-      "metrics_collection_interval": 60,
-      "run_as_user": "root"
-    },
-    "logs": {
-      "logs_collected": {
-        "files": {
-          "collect_list": [
-            {
-              "file_path": "/opt/webapp/logs/application.log",
-              "log_group_name": "webapp-logs",
-              "log_stream_name": "{instance_id}-application",
-              "retention_in_days": 7
-            },
-            {
-              "file_path": "/opt/webapp/logs/error.log",
-              "log_group_name": "webapp-logs",
-              "log_stream_name": "{instance_id}-error",
-              "retention_in_days": 7
-            }
-          ]
-        }
-      }
-    },
-    "metrics": {
-      "namespace": "WebApp",
-      "metrics_collected": {
-        "statsd": {
-          "service_address": ":8125",
-          "metrics_collection_interval": 10,
-          "metrics_aggregation_interval": 60
-        }
-      }
-    }
-  }
-  CWAGENTCONFIG
-  
-  # Start CloudWatch agent
-  /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-  
-  # Create environment file
-  cat > /opt/webapp/.env << ENVEOF
-  DB_HOST=${aws_db_instance.webapp_db.address}
-  DB_PORT=${var.db_port}
-  DB_USER=${var.db_username}
-  DB_PASSWORD=${var.db_password}
-  DB_NAME=${var.db_name}
-  AWS_REGION=${var.region}
-  S3_BUCKET=${aws_s3_bucket.webapp_bucket.bucket}
-  PORT=${var.app_port}
-  NODE_ENV=production
-  LOG_DIRECTORY=/opt/webapp/logs
-  ENVEOF
-  
-  # Create directories
-  mkdir -p /opt/webapp/logs
-  chmod 755 /opt/webapp/logs
-  
-  # Set proper permissions
-  chmod 600 /opt/webapp/.env
-  chown webapp:webapp /opt/webapp/.env
-  chown webapp:webapp /opt/webapp/logs
-  
-  # Restart application service
-  systemctl restart webapp
-EOF
-
-  root_block_device {
-    volume_size           = 25
-    volume_type           = "gp2"
-    delete_on_termination = true
-  }
-
-  disable_api_termination = false
-
-  tags = {
-    Name = "WebApp-EC2-Instance"
-  }
-}
 
 # S3 Bucket with UUID name
 resource "random_uuid" "bucket_uuid" {}
@@ -254,7 +155,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "webapp_bucket_enc
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.s3_key.arn
     }
   }
 }
@@ -335,13 +237,15 @@ resource "aws_db_instance" "webapp_db" {
   instance_class         = var.db_instance_class
   db_name                = var.db_name
   username               = var.db_username
-  password               = var.db_password
+  password               = random_password.db_password.result
   parameter_group_name   = aws_db_parameter_group.db_parameter_group.name
   db_subnet_group_name   = aws_db_subnet_group.db_subnet_group.name
   vpc_security_group_ids = [aws_security_group.database_sg.id]
   publicly_accessible    = false
   skip_final_snapshot    = true
   multi_az               = false
+  storage_encrypted      = true
+  kms_key_id             = aws_kms_key.rds_key.arn
 
   tags = {
     Name = "WebApp RDS Instance"
