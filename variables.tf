@@ -9,7 +9,7 @@ variable "region" {
 variable "profile" {
   description = "CLI Profile for authentication"
   type        = string
-  default     = "profiledemo"
+  default     = "packer-cli"
 }
 
 # Define the CIDR block for the Virtual Private Cloud (VPC)
@@ -29,7 +29,7 @@ variable "subnet_count" {
 variable "ami_id" {
   description = "Custom AMI ID for EC2"
   type        = string
-  default     = "ami-0a43950b2d34e59f3"
+  default     = "ami-0d09d0ff5b959f96e"
 }
 
 # SSH Key Pair name for EC2 instances
@@ -89,4 +89,15 @@ variable "route53_zone_id" {
 variable "domain_name" {
   description = "Domain name for the application"
   type        = string
+}
+variable "environment" {
+  description = "Deployment environment (dev or demo)"
+  type        = string
+  default     = "demo"
+}
+
+variable "imported_certificate_arn" {
+  description = "ARN of the imported ACM certificate for demo environment"
+  type        = string
+  default     = ""  # Empty string default
 }

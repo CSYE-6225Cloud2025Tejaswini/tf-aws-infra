@@ -1,191 +1,162 @@
-# Infrastructure Setup with Terraform
+Infrastructure Setup with Terraform
+This repository sets up secure and scalable infrastructure on AWS using Terraform.
 
-This repository contains Terraform configurations to provision and manage our infrastructure as code. Below you'll find instructions for setting up, configuring, and deploying infrastructure using Terraform.
+Prerequisites
+Terraform
 
-## Prerequisites
+AWS CLI
 
-- [Terraform](https://www.terraform.io/downloads.html) (v1.0.0 or later)
-- AWS CLI configured with appropriate credentials
-- Git
+Git
 
-## Getting Started
+IAM permissions to manage EC2, RDS, S3, ACM, Secrets Manager, and KMS
 
-### 1. Clone the Repository
+SSL Certificates:
 
-```bash
+Dev: AWS ACM
+
+Demo: Namecheap (import manually)
+
+Getting Started
+
+1. Clone the Repository
+bash
+Copy
+Edit
 git clone https://github.com/your-organization/your-repo.git
-cd your-repo/terraform
-```
+cd your-repo/tf-aws-infra
 
-### 2. Initialize Terraform
-
-```bash
+2. Initialize Terraform
+bash
+Copy
+Edit
 terraform init
-```
 
-This will download the necessary providers and initialize the Terraform working directory.
+3. Set Variables
+Create a terraform.tfvars file:
 
-### 3. Configure Environment Variables
+hcl
+Copy
+Edit
+environment = "demo"
+region = "us-east-1"
+key_name = "your-key-pair"
+vpc_cidr = "10.0.0.0/16"
+db_username = "csye6225"
+db_name = "csye6225"
+app_port = 8080
 
-Create a `terraform.tfvars` file in the terraform directory:
+4. Apply Infrastructure
+bash
+Copy
+Edit
+terraform plan -var-file=demo.tfvars
+terraform apply -var-file=demo.tfvars
+Infrastructure Components
+VPC with public and private subnets
 
-```hcl
-# Infrastructure Settings
-environment = "dev" # Options: dev, staging, prod
+Auto Scaling Group behind an Application Load Balancer
 
-# AWS Configuration
-aws_region = "us-west-2"
-vpc_cidr   = "10.0.0.0/16"
+EC2 instances auto-configured with application via user-data
 
-# Database Configuration
-db_instance_type = "db.t3.medium"
-db_name          = "appdb"
-db_user          = "dbadmin"
-# db_password should be set via environment variable TF_VAR_db_password
+RDS MySQL Database encrypted with KMS
 
-# Application Settings
-app_instance_type = "t3.medium"
-app_instance_count = 2
-```
+S3 Bucket (KMS-encrypted)
 
-For sensitive values, use environment variables:
+Secrets Manager for database credentials
 
-```bash
-export TF_VAR_db_password="your-secure-password"
-```
+SSL Certificates for secure load balancer access
 
-### 4. Review the Execution Plan
+CloudWatch Alarms for Auto-Scaling
 
-```bash
-terraform plan
-```
+Secrets Management
+Database credentials are stored in AWS Secrets Manager.
 
-This will show you what changes Terraform will make to your infrastructure.
+EC2 instances securely fetch secrets at boot.
 
-### 5. Apply Changes
+Secrets are encrypted with KMS and rotated every 90 days.
 
-```bash
-terraform apply
-```
+SSL Certificates
+Environment	Certificate Source
+Dev	AWS Certificate Manager (ACM)
+Demo	Namecheap (manual import)
+Import Certificate Command:
 
-Review the plan one more time and type `yes` to confirm.
+bash
+Copy
+Edit
+aws acm import-certificate \
+  --certificate fileb://certificate.pem \
+  --private-key fileb://private-key.pem \
+  --certificate-chain fileb://certificate-chain.pem \
+  --region us-east-1
+GitHub Actions CI/CD Workflow
+On Pull Request: Validate code and run tests
 
-## Available Modules
+On Pull Request Merge:
 
-### Networking
+Build AMI in Dev AWS Account
 
-Sets up VPC, subnets, route tables, and security groups.
+Share AMI with Demo Account
 
-```hcl
-module "networking" {
-  source = "./modules/networking"
-  
-  vpc_cidr = var.vpc_cidr
-  environment = var.environment
-}
-```
+Switch AWS credentials to Demo
 
-### Database
+Update Launch Template
 
-Provisions RDS instances.
+Start Auto-Scaling Group Instance Refresh
 
-```hcl
-module "database" {
-  source = "./modules/database"
-  
-  instance_type = var.db_instance_type
-  db_name = var.db_name
-  db_user = var.db_user
-  db_password = var.db_password
-  subnet_ids = module.networking.private_subnet_ids
-  security_group_ids = [module.networking.db_security_group_id]
-}
-```
+Wait for refresh to complete
 
-### Compute
+GitHub Secrets used:
 
-Sets up application servers or containers.
+DEV_AWS_ACCESS_KEY_ID
 
-```hcl
-module "compute" {
-  source = "./modules/compute"
-  
-  instance_type = var.app_instance_type
-  instance_count = var.app_instance_count
-  subnet_ids = module.networking.private_subnet_ids
-  security_group_ids = [module.networking.app_security_group_id]
-}
-```
+DEV_AWS_SECRET_ACCESS_KEY
 
-## Continuous Integration
+DEMO_AWS_ACCESS_KEY_ID
 
-This repository is configured with GitHub Actions to validate Terraform configurations on every pull request. The workflow:
+DEMO_AWS_SECRET_ACCESS_KEY
 
-1. Runs `terraform validate` to check syntax
-2. Runs `terraform plan` to verify changes
-3. Comments the plan output on the PR
+DB_HOST, DB_PASSWORD, S3_BUCKET
 
-## State Management
+VPC_IDENTIFIER_DEV, SUBNET_IDENTIFIER_DEV
 
-We use an S3 backend for storing Terraform state remotely:
+DEMO_ACCOUNT_ID_PKR
 
-```hcl
-terraform {
-  backend "s3" {
-    bucket = "your-terraform-state-bucket"
-    key    = "terraform.tfstate"
-    region = "us-west-2"
-    dynamodb_table = "terraform-state-lock"
-    encrypt = true
-  }
-}
-```
+Monitoring
+CloudWatch Metrics: CPU, Disk, Logs
 
-## Best Practices
+CloudWatch Alarms: Auto-scale when CPU > 5% or < 3%
 
-1. **Never commit sensitive values** to Git. Use environment variables or a secure secrets manager.
-2. **Always run `terraform plan`** before applying changes.
-3. **Use modules** for reusable components.
-4. **Tag all resources** for better organization and cost tracking.
-5. **Use workspaces** for managing multiple environments with the same configuration.
+Troubleshooting
+Issue	Solution
+502 Bad Gateway	Check app running status on EC2 (systemctl)
+App cannot connect to database	Check Secrets retrieval in .env
+SSL errors on Load Balancer	Validate ACM certificate attachment
+Instances unhealthy	Validate user-data script and app service
+Best Practices
+Use Infrastructure as Code (IaC) with Terraform
 
-## Troubleshooting
+Encrypt all data at rest using KMS
 
-### Common Issues
+Secure secrets with Secrets Manager
 
-1. **Credential errors**: Ensure your AWS credentials are properly configured
-   ```bash
-   aws configure
-   ```
+Enforce SSL across all environments
 
-2. **State lock errors**: If a previous Terraform command was interrupted
-   ```bash
-   terraform force-unlock <LOCK_ID>
-   ```
+Automate AMI builds and instance updates
 
-3. **Provider version conflicts**: Update your Terraform version or specify provider versions
-   ```hcl
-   terraform {
-     required_providers {
-       aws = {
-         source  = "hashicorp/aws"
-         version = "~> 4.0"
-       }
-     }
-   }
-   ```
+Enable KMS key rotation (90 days)
 
-## Contributing
+✅ Final Assignment 08 Requirements Checklist
+Launch Template + Auto Scaling Group ✅
 
-1. Create a feature branch from `main`
-2. Make your changes
-3. Run `terraform fmt` to standardize code formatting
-4. Run `terraform validate` to check for errors
-5. Submit a pull request
+Pull Request triggers GitHub Actions ✅
 
-## Security Considerations
+Merge triggers AMI build, share, and instance refresh ✅
 
-- Restrict IAM permissions to the minimum required
-- Enable encryption for all sensitive data
-- Use private subnets for resources that don't need public access
-- Implement security groups with least privilege access
+KMS encryption for EC2, RDS, S3, Secrets Manager ✅
+
+Secrets managed securely ✅
+
+SSL/TLS setup complete for Load Balancer ✅
+
+Healthy Load Balancer Targets ✅

@@ -1,7 +1,7 @@
 # Define the AWS provider with region and profile from variables
 provider "aws" {
   region  = var.region
-  profile = var.profile
+  profile = "packer-cli"
 }
 
 # Fetch available AZs dynamically
@@ -155,7 +155,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "webapp_bucket_enc
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.s3_key.arn
     }
   }
 }
@@ -236,13 +237,15 @@ resource "aws_db_instance" "webapp_db" {
   instance_class         = var.db_instance_class
   db_name                = var.db_name
   username               = var.db_username
-  password               = var.db_password
+  password               = random_password.db_password.result
   parameter_group_name   = aws_db_parameter_group.db_parameter_group.name
   db_subnet_group_name   = aws_db_subnet_group.db_subnet_group.name
   vpc_security_group_ids = [aws_security_group.database_sg.id]
   publicly_accessible    = false
   skip_final_snapshot    = true
   multi_az               = false
+  storage_encrypted      = true
+  kms_key_id             = aws_kms_key.rds_key.arn
 
   tags = {
     Name = "WebApp RDS Instance"
